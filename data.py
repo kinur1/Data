@@ -1,36 +1,36 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
-import plotly.express as px
+import datetime
 
-st.title("📈 Yahoo Finance Data Viewer")
+# Judul aplikasi
+st.title("📈 Yahoo Finance Stock Viewer")
 
-# Input ticker dari user
-ticker = st.text_input("Masukkan Ticker (contoh: BTC-USD, ETH-USD, AAPL):", "BTC-USD")
+# Input ticker
+ticker = st.text_input("Masukkan Ticker Saham (contoh: AAPL, TSLA, BBRI.JK)", "AAPL")
 
-# Input rentang tanggal
-start_date = st.date_input("Tanggal Mulai", pd.to_datetime("2022-01-01"))
-end_date = st.date_input("Tanggal Akhir", pd.to_datetime("today"))
+# Pilih rentang tanggal
+start_date = st.date_input("Tanggal Mulai", datetime.date(2024, 1, 1))
+end_date = st.date_input("Tanggal Akhir", datetime.date.today())
 
-if st.button("Lihat Data"):
+# Tombol ambil data
+if st.button("Ambil Data"):
     try:
-        # Ambil data dari yfinance
+        # Download data
         data = yf.download(ticker, start=start_date, end=end_date)
 
-        if data.empty:
-            st.warning("⚠️ Data tidak ditemukan untuk ticker dan tanggal tersebut.")
+        if not data.empty:
+            st.subheader(f"Data Harga {ticker}")
+            st.write(data.tail())  # tampilkan data terakhir
+            
+            # Chart harga penutupan
+            st.subheader("Grafik Harga Penutupan")
+            st.line_chart(data['Close'])
+
+            # Volume perdagangan
+            st.subheader("Grafik Volume")
+            st.bar_chart(data['Volume'])
         else:
-            # Tampilkan data
-            st.subheader(f"Data {ticker}")
-            st.dataframe(data)
-
-            # Plot harga penutupan
-            fig = px.line(data, x=data.index, y="Close", title=f"Harga Penutupan {ticker}")
-            st.plotly_chart(fig)
-
-            # Plot volume
-            fig_vol = px.bar(data, x=data.index, y="Volume", title=f"Volume Perdagangan {ticker}")
-            st.plotly_chart(fig_vol)
-
+            st.warning("Data tidak ditemukan. Coba ticker lain.")
     except Exception as e:
-        st.error(f"Terjadi kesalahan: {e}")
+        st.error(f"Terjadi error: {e}")
