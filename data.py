@@ -31,32 +31,43 @@ for ticker, stock_data in data.items():
     st.subheader(f'Data for {ticker}')
     st.write(stock_data)
 
-    # Plot enhanced line chart with color gradient
-    st.subheader(f'Enhanced Line Chart for {ticker}')
-    fig = px.line(stock_data, x=stock_data.index, y='Close', title=f'{ticker} Close Price',
-                  labels={'Close': 'Close Price', 'index': 'Date'},
-                  color_discrete_sequence=px.colors.sequential.Viridis)
+    # Reset index agar Date jadi kolom biasa
+    stock_data_reset = stock_data.reset_index()
 
-    # Customize layout for better visuals
-    fig.update_traces(line=dict(width=2.5))  # Adjust line width
-    fig.update_layout(
-        xaxis_title='Date',
-        yaxis_title='Close Price',
-        template='plotly_dark',  # Dark background for contrast
-        title=dict(
-            text=f'{ticker} Closing Prices',
-            font=dict(size=20, color='white'),
-            x=0.5  # Center title
-        ),
-        xaxis=dict(
-            showline=True, showgrid=False, linecolor='white'
-        ),
-        yaxis=dict(
-            showline=True, showgrid=True, gridcolor='gray', linecolor='white'
+    if 'Close' in stock_data_reset.columns:
+        # Plot enhanced line chart with color gradient
+        st.subheader(f'Enhanced Line Chart for {ticker}')
+        fig = px.line(
+            stock_data_reset,
+            x="Date",
+            y="Close",
+            title=f"{ticker} Close Price",
+            labels={"Close": "Close Price", "Date": "Date"},
+            color_discrete_sequence=px.colors.sequential.Viridis
         )
-    )
 
-    st.plotly_chart(fig)
+        # Customize layout for better visuals
+        fig.update_traces(line=dict(width=2.5))
+        fig.update_layout(
+            xaxis_title="Date",
+            yaxis_title="Close Price",
+            template="plotly_dark",  # Dark background for contrast
+            title=dict(
+                text=f"{ticker} Closing Prices",
+                font=dict(size=20, color="white"),
+                x=0.5  # Center title
+            ),
+            xaxis=dict(
+                showline=True, showgrid=False, linecolor="white"
+            ),
+            yaxis=dict(
+                showline=True, showgrid=True, gridcolor="gray", linecolor="white"
+            )
+        )
+
+        st.plotly_chart(fig)
+    else:
+        st.warning(f"Kolom 'Close' tidak ditemukan pada data {ticker}")
 
     # Save data to CSV for download
     csv_buffer = StringIO()
