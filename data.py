@@ -1,62 +1,78 @@
 import streamlit as st
-import requests
+import yfinance as yf
 import pandas as pd
 import plotly.express as px
+from io import StringIO
 
-st.set_page_config(page_title="Crypto Data Viewer", page_icon="📊", layout="wide")
+st.set_page_config(page_title="Yahoo Finance Viewer", page_icon="📊", layout="wide")
+st.title('📊 Yahoo Finance Ticker Data Viewer')
 
-API_KEY = "45G1G2AY7W8KD3S5"
+# =========================
+# Input user
+# =========================
+ticker_input = st.text_input("Masukan Ticker (Seperti BTC-USD, BNB-USD):", 'BTC-USD, BNB-USD')
+tickers = [ticker.strip().upper() for ticker in ticker_input.split(',')]
 
-st.title("📊 Cryptocurrency Data Viewer (Alpha Vantage API)")
-tickers = st.text_input("Masukkan Ticker (Seperti BTC, ETH, BNB):", "BTC, ETH")
+start_date = st.date_input("Pilih tanggal mulai", pd.to_datetime('today') - pd.DateOffset(years=1))
+end_date = st.date_input("Pilih tanggal akhir", pd.to_datetime('today'))
 
-if tickers:
-    tickers = [t.strip().upper() for t in tickers.split(",")]
-
-    for ticker in tickers:
-        st.subheader(f"Data untuk {ticker}")
-
-        url = f"https://www.alphavantage.co/query?function=DIGITAL_CURRENCY_DAILY&symbol={ticker}&market=USD&apikey={API_KEY}"
-        r = requests.get(url)
-        data = r.json()
-
-        if "Time Series (Digital Currency Daily)" not in data:
-            st.error(f"Gagal ambil data {ticker}")
-            continue
-
-        ts = data["Time Series (Digital Currency Daily)"]
-
-        df = pd.DataFrame(ts).T
-
-        # 🔹 Cek kolom yang tersedia
-        st.write("Kolom asli:", df.columns.tolist())
-
-        # Cari kolom yang sesuai
-        rename_map = {}
-        for col in df.columns:
-            if "open" in col: rename_map[col] = "Open"
-            elif "high" in col: rename_map[col] = "High"
-            elif "low" in col: rename_map[col] = "Low"
-            elif "close" in col: rename_map[col] = "Close"
-            elif "volume" in col: rename_map[col] = "Volume"
-
-        df = df.rename(columns=rename_map)
-
-        # Pilih hanya kolom yang berhasil diubah namanya
-        available_cols = [c for c in ["Open", "High", "Low", "Close", "Volume"] if c in df.columns]
-        df = df[available_cols].astype(float)
-
-        df.index = pd.to_datetime(df.index)
-        df = df.sort_index()
-
-        st.dataframe(df.tail(10))  # tampilkan 10 data terakhir
-
-        if "Close" in df.columns:
-            # Chart harga penutupan pakai Plotly
-            st.subheader(f"Grafik Harga Penutupan {ticker}")
-            fig = px.line(df, x=df.index, y="Close", title=f"{ticker} Closing Price (USD)",
-                          labels={"x": "Date", "Close": "Price (USD)"},
-                          template="plotly_dark")
-            st.plotly_chart(fig, use_container_width=True)
+# =========================
+# Ambil data
+# =========================
+data = {}
+for ticker in tickers:
+    try:
+        stock_data = yf.download(ticker, start=start_date, end=end_date, progress=False, threads=False)
+        if not stock_data.empty:
+            data[ticker] = stock_data
         else:
-            st.warning(f"Tidak ada data harga penutupan (Close) untuk {ticker}")
+            st.warning(f"⚠️ Tidak ada data ditemukan untuk {ticker}. Coba periksa ticker atau rentang tanggal.")
+    except Exception as e:
+        st.error(f"❌ Gagal mengambil data {ticker}. Error: {e}")
+
+# =========================
+# Tampilkan data + chart
+# =========================
+for ticker, stock_data in data.items():
+    st.subheader(f'📌 Data untuk {ticker}')
+    st.dataframe(stock_data.tail(10))  # tampilkan 10 data terakhir saja
+
+    # =========================
+    # Plot harga penutupan
+    # =========================
+    if "Close" in stock_data.columns:
+        st.subheader(f'📈 Grafik Harga Penutupan {ticker}')
+        fig = px.line(
+            stock_data,
+            x=stock_data.index,
+            y='Close',
+            title=f'{ticker} Closing Price',
+            labels={'Close': 'Close Price (USD)', 'index': 'Date'},
+            color_discrete_sequence=px.colors.sequential.Viridis
+        )
+
+        fig.update_traces(line=dict(width=2.5))
+        fig.update_layout(
+            xaxis_title='Date',
+            yaxis_title='Close Price (USD)',
+            template='plotly_dark',
+            title=dict(text=f'{ticker} Closing Prices', font=dict(size=20, color='white'), x=0.5),
+            xaxis=dict(showline=True, showgrid=False, linecolor='white'),
+            yaxis=dict(showline=True, showgrid=True, gridcolor='gray', linecolor='white')
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
+
+    # =========================
+    # Download CSV
+    # =========================
+    csv_buffer = StringIO()
+    stock_data.to_csv(csv_buffer)
+    csv_data = csv_buffer.getvalue()
+
+    st.download_button(
+        label=f"⬇️ Download data {ticker} sebagai CSV",
+        data=csv_data,
+        file_name=f"{ticker}_data.csv",
+        mime="text/csv"
+    )
