@@ -28,17 +28,17 @@ for ticker in tickers:
 
         if "Time Series (Digital Currency Daily)" in json_data:
             ts = json_data["Time Series (Digital Currency Daily)"]
-            df = pd.DataFrame([
-                {
+            records = []
+            for date, values in ts.items():
+                records.append({
                     "Date": date,
-                    "Open": float(values["1a. open (USD)"]),
-                    "High": float(values["2a. high (USD)"]),
-                    "Low": float(values["3a. low (USD)"]),
-                    "Close": float(values["4a. close (USD)"]),
-                    "Volume": float(values["5. volume"])
-                }
-                for date, values in ts.items()
-            ])
+                    "Open": float(values.get("1a. open (USD)", values.get("1b. open (USD)", 0))),
+                    "High": float(values.get("2a. high (USD)", values.get("2b. high (USD)", 0))),
+                    "Low": float(values.get("3a. low (USD)", values.get("3b. low (USD)", 0))),
+                    "Close": float(values.get("4a. close (USD)", values.get("4b. close (USD)", 0))),
+                    "Volume": float(values.get("5. volume", 0))
+                })
+            df = pd.DataFrame(records)
 
             # Urutkan berdasarkan tanggal
             df["Date"] = pd.to_datetime(df["Date"])
