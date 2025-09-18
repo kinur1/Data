@@ -1,7 +1,7 @@
 import streamlit as st
 import requests
 import pandas as pd
-import matplotlib.pyplot as plt
+import plotly.express as px
 
 st.set_page_config(page_title="Crypto Data Viewer", page_icon="📊", layout="wide")
 
@@ -41,11 +41,9 @@ if tickers:
 
         st.dataframe(df.tail(10))  # tampilkan 10 data terakhir
 
-        # Chart harga penutupan
+        # Chart harga penutupan pakai Plotly
         st.subheader(f"Grafik Harga Penutupan {ticker}")
-        fig, ax = plt.subplots()
-        ax.plot(df.index, df["Close"], label=f"{ticker} Closing Price")
-        ax.set_xlabel("Date")
-        ax.set_ylabel("Price (USD)")
-        ax.legend()
-        st.pyplot(fig)
+        fig = px.line(df, x=df.index, y="Close", title=f"{ticker} Closing Price (USD)",
+                      labels={"x": "Date", "Close": "Price (USD)"},
+                      template="plotly_dark")
+        st.plotly_chart(fig, use_container_width=True)
