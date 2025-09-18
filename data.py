@@ -27,23 +27,36 @@ if tickers:
         ts = data["Time Series (Digital Currency Daily)"]
 
         df = pd.DataFrame(ts).T
-        df = df.rename(columns={
-            "1a. open (USD)": "Open",
-            "2a. high (USD)": "High",
-            "3a. low (USD)": "Low",
-            "4a. close (USD)": "Close",
-            "5. volume": "Volume"
-        })
 
-        df = df[["Open", "High", "Low", "Close", "Volume"]].astype(float)
+        # 🔹 Cek kolom yang tersedia
+        st.write("Kolom asli:", df.columns.tolist())
+
+        # Cari kolom yang sesuai
+        rename_map = {}
+        for col in df.columns:
+            if "open" in col: rename_map[col] = "Open"
+            elif "high" in col: rename_map[col] = "High"
+            elif "low" in col: rename_map[col] = "Low"
+            elif "close" in col: rename_map[col] = "Close"
+            elif "volume" in col: rename_map[col] = "Volume"
+
+        df = df.rename(columns=rename_map)
+
+        # Pilih hanya kolom yang berhasil diubah namanya
+        available_cols = [c for c in ["Open", "High", "Low", "Close", "Volume"] if c in df.columns]
+        df = df[available_cols].astype(float)
+
         df.index = pd.to_datetime(df.index)
         df = df.sort_index()
 
         st.dataframe(df.tail(10))  # tampilkan 10 data terakhir
 
-        # Chart harga penutupan pakai Plotly
-        st.subheader(f"Grafik Harga Penutupan {ticker}")
-        fig = px.line(df, x=df.index, y="Close", title=f"{ticker} Closing Price (USD)",
-                      labels={"x": "Date", "Close": "Price (USD)"},
-                      template="plotly_dark")
-        st.plotly_chart(fig, use_container_width=True)
+        if "Close" in df.columns:
+            # Chart harga penutupan pakai Plotly
+            st.subheader(f"Grafik Harga Penutupan {ticker}")
+            fig = px.line(df, x=df.index, y="Close", title=f"{ticker} Closing Price (USD)",
+                          labels={"x": "Date", "Close": "Price (USD)"},
+                          template="plotly_dark")
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.warning(f"Tidak ada data harga penutupan (Close) untuk {ticker}")
