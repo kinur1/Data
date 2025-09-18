@@ -1,27 +1,51 @@
+import streamlit as st
 import requests
 import pandas as pd
+import matplotlib.pyplot as plt
+
+st.set_page_config(page_title="Crypto Data Viewer", page_icon="📊", layout="wide")
 
 API_KEY = "45G1G2AY7W8KD3S5"
-symbol = "BTC"
-market = "USD"
 
-url = f"https://www.alphavantage.co/query?function=DIGITAL_CURRENCY_DAILY&symbol={symbol}&market={market}&apikey={API_KEY}"
-r = requests.get(url)
-data = r.json()
+st.title("📊 Cryptocurrency Data Viewer (Alpha Vantage API)")
+tickers = st.text_input("Masukkan Ticker (Seperti BTC, ETH, BNB):", "BTC, ETH")
 
-time_series = data["Time Series (Digital Currency Daily)"]
+if tickers:
+    tickers = [t.strip().upper() for t in tickers.split(",")]
 
-df = pd.DataFrame(time_series).T
-df = df.rename(columns={
-    "1a. open (USD)": "Open",
-    "2a. high (USD)": "High",
-    "3a. low (USD)": "Low",
-    "4a. close (USD)": "Close",
-    "5. volume": "Volume"
-})
+    for ticker in tickers:
+        st.subheader(f"Data untuk {ticker}")
 
-df = df[["Open", "High", "Low", "Close", "Volume"]].astype(float)
-df.index = pd.to_datetime(df.index)
-df = df.sort_index()
+        url = f"https://www.alphavantage.co/query?function=DIGITAL_CURRENCY_DAILY&symbol={ticker}&market=USD&apikey={API_KEY}"
+        r = requests.get(url)
+        data = r.json()
 
-print(df.head())
+        if "Time Series (Digital Currency Daily)" not in data:
+            st.error(f"Gagal ambil data {ticker}")
+            continue
+
+        ts = data["Time Series (Digital Currency Daily)"]
+
+        df = pd.DataFrame(ts).T
+        df = df.rename(columns={
+            "1a. open (USD)": "Open",
+            "2a. high (USD)": "High",
+            "3a. low (USD)": "Low",
+            "4a. close (USD)": "Close",
+            "5. volume": "Volume"
+        })
+
+        df = df[["Open", "High", "Low", "Close", "Volume"]].astype(float)
+        df.index = pd.to_datetime(df.index)
+        df = df.sort_index()
+
+        st.dataframe(df.tail(10))  # tampilkan 10 data terakhir
+
+        # Chart harga penutupan
+        st.subheader(f"Grafik Harga Penutupan {ticker}")
+        fig, ax = plt.subplots()
+        ax.plot(df.index, df["Close"], label=f"{ticker} Closing Price")
+        ax.set_xlabel("Date")
+        ax.set_ylabel("Price (USD)")
+        ax.legend()
+        st.pyplot(fig)
