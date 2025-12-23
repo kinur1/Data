@@ -3,6 +3,7 @@ import yfinance as yf
 import pandas as pd
 import plotly.express as px
 from io import StringIO
+from datetime import timedelta
 
 st.title('Yahoo Finance Ticker Data Viewer')
 
@@ -10,9 +11,12 @@ st.title('Yahoo Finance Ticker Data Viewer')
 ticker_input = st.text_input("Masukan Ticker (Seperti BTC-USD, BNB-USD):", 'BTC-USD, BNB-USD')
 tickers = [ticker.strip().upper() for ticker in ticker_input.split(',') if ticker.strip()]
 
+# Interval (tambahan)
+interval = st.selectbox("Interval", ["1d", "1h", "15m", "5m", "1m"], index=0)
+
 # User input for date range
-default_start = pd.to_datetime('today') - pd.DateOffset(years=1)
-default_end = pd.to_datetime('today')
+default_start = (pd.to_datetime('today') - pd.DateOffset(years=1)).date()
+default_end = pd.to_datetime('today').date()
 
 start_date = st.date_input("Select start date", default_start)
 end_date = st.date_input("Select end date", default_end)
@@ -20,6 +24,22 @@ end_date = st.date_input("Select end date", default_end)
 if pd.to_datetime(start_date) >= pd.to_datetime(end_date):
     st.error("Tanggal akhir harus lebih besar dari tanggal mulai.")
     st.stop()
+
+# ===== FIX: clamp range untuk intraday agar tidak kosong (limit Yahoo Finance) =====
+def clamp_dates_for_interval(start, end, interval_str):
+    # start/end adalah date
+    if interval_str == "1m":
+        # 1m umumnya hanya beberapa hari (aman: 7 hari)
+        start = max(start, end - timedelta(days=6))
+    elif interval_str in ["5m", "15m"]:
+        # 5m/15m umumnya aman sampai ~60 hari
+        start = max(start, end - timedelta(days=59))
+    # 1h/1d biasanya aman lebih panjang
+    return start, end
+
+# ===== FIX: end exclusive -> tambahkan +1 hari =====
+def end_inclusive(end):
+    return end + timedelta(days=1)
 
 # Helper: flatten MultiIndex columns -> strings
 def flatten_columns(columns):
@@ -56,28 +76,72 @@ def prepare_df_for_plot(df, ticker):
     y_col = next((c for c in candidates if c in df_reset.columns), None)
     return df_reset, y_col
 
+# ===== Download helper dengan fallback =====
+def download_with_fallback(ticker, start, end, interval_str):
+    # clamp untuk intraday
+    start_c, end_c = clamp_dates_for_interval(start, end, interval_str)
+    # end inclusive
+    end_c_inc = end_inclusive(end_c)
+
+    df = yf.download(
+        ticker,
+        start=pd.to_datetime(start_c),
+        end=pd.to_datetime(end_c_inc),
+        interval=interval_str,
+        progress=False,
+        group_by="column",
+        auto_adjust=False,
+        threads=False,
+    )
+
+    if df is not None and not df.empty:
+        return df, (start_c, end_c)
+
+    # fallback kalau kosong: pakai period yang masuk akal
+    fallback_period = "6mo"
+    if interval_str == "1m":
+        fallback_period = "7d"
+    elif interval_str in ["5m", "15m"]:
+        fallback_period = "60d"
+    elif interval_str == "1h":
+        fallback_period = "6mo"
+
+    df2 = yf.download(
+        ticker,
+        period=fallback_period,
+        interval=interval_str,
+        progress=False,
+        group_by="column",
+        auto_adjust=False,
+        threads=False,
+    )
+    return df2, None
+
 # Download data untuk tiap ticker
 data = {}
+effective_ranges = {}  # buat info range yang dipakai
 for ticker in tickers:
     try:
-        stock_data = yf.download(
-            ticker,
-            start=pd.to_datetime(start_date),
-            end=pd.to_datetime(end_date),
-            progress=False,
-            group_by="column",  # konsistenkan orientasi MultiIndex
-            auto_adjust=False
-        )
-        if not stock_data.empty:
+        stock_data, used_range = download_with_fallback(ticker, start_date, end_date, interval)
+
+        if stock_data is not None and not stock_data.empty:
             data[ticker] = stock_data
+            effective_ranges[ticker] = used_range
         else:
-            st.warning(f"No data found for ticker: {ticker}")
+            st.warning(f"No data found for ticker: {ticker} (coba interval 1d atau perluas tanggal)")
     except Exception as e:
         st.error(f"Error downloading data for ticker: {ticker}. Error: {e}")
 
 # Tampilkan table, chart, dan tombol unduh
 for ticker, stock_data in data.items():
     st.subheader(f'Data for {ticker}')
+
+    used_range = effective_ranges.get(ticker)
+    if used_range is None:
+        st.caption(f"Mode: fallback period (interval={interval})")
+    else:
+        st.caption(f"Mode: start/end (interval={interval}) | range dipakai: {used_range[0]} s/d {used_range[1]}")
+
     df_plot, y_col = prepare_df_for_plot(stock_data, ticker)
 
     # Tampilkan tabel yang sudah rapi (kolom flatten)
