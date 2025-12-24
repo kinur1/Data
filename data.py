@@ -122,12 +122,12 @@ for ticker, stock_data in data.items():
         c1, c2 = st.columns(2)
         c1.metric(
             label="All-Time High (range dipilih)",
-            value=f"{ath:,.4f}",
+            value=f"${ath:,.4f}",
             help=f"Tanggal: {ath_date}"
         )
         c2.metric(
             label="All-Time Low (range dipilih)",
-            value=f"{atl:,.4f}",
+            value=f"${atl:,.4f}",
             help=f"Tanggal: {atl_date}"
         )
     else:
@@ -179,3 +179,4 @@ for ticker, stock_data in data.items():
     csv_buffer = StringIO()
     df_plot.to_csv(csv_buffer, index=False)
     csv_data = csv_buffer.getvalue()
+
