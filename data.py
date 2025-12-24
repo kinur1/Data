@@ -1,19 +1,19 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
-import plotly.express as px
-from io import StringIO
 import plotly.graph_objects as go
+from io import StringIO
+from datetime import timedelta
 
-st.title('Ticker Data Viewer')
+st.title('Yahoo Finance Ticker Data Viewer')
 
 # User input for tickers
 ticker_input = st.text_input("Masukan Ticker (Seperti BTC-USD, BNB-USD):", 'BTC-USD, BNB-USD')
 tickers = [ticker.strip().upper() for ticker in ticker_input.split(',') if ticker.strip()]
 
 # User input for date range
-default_start = pd.to_datetime('today') - pd.DateOffset(years=1)
-default_end = pd.to_datetime('today')
+default_start = (pd.to_datetime('today') - pd.DateOffset(years=1)).date()
+default_end = pd.to_datetime('today').date()
 
 start_date = st.date_input("Select start date", default_start)
 end_date = st.date_input("Select end date", default_end)
@@ -49,13 +49,20 @@ def prepare_df_for_plot(df, ticker):
 
     # Cari kandidat kolom y untuk Close
     candidates = [
-        f'Close_{ticker}',    # format jika MultiIndex diflatten jadi Close_TICKER
-        'Close',              # format single-ticker
+        f'Close_{ticker}',
+        'Close',
         f'Adj Close_{ticker}',
         'Adj Close'
     ]
     y_col = next((c for c in candidates if c in df_reset.columns), None)
     return df_reset, y_col
+
+# Helper: pilih kolom OHLC yang benar (bisa Close atau Close_TICKER)
+def pick_col(df, base, ticker):
+    for c in [f"{base}_{ticker}", base]:
+        if c in df.columns:
+            return c
+    return None
 
 # Download data untuk tiap ticker
 data = {}
@@ -64,17 +71,21 @@ for ticker in tickers:
         stock_data = yf.download(
             ticker,
             start=pd.to_datetime(start_date),
-            end=pd.to_datetime(end_date),
+            end=pd.to_datetime(end_date) + timedelta(days=1),  # FIX: end inclusive
             progress=False,
-            group_by="column",  # konsistenkan orientasi MultiIndex
-            auto_adjust=False
+            group_by="column",
+            auto_adjust=False,
+            threads=False
         )
-        if not stock_data.empty:
+        if stock_data is not None and not stock_data.empty:
             data[ticker] = stock_data
         else:
             st.warning(f"No data found for ticker: {ticker}")
     except Exception as e:
         st.error(f"Error downloading data for ticker: {ticker}. Error: {e}")
+
+# Info ticker yang berhasil ke-load (biar jelas kalau cuma 1)
+st.write("Ticker berhasil dimuat:", list(data.keys()))
 
 # Tampilkan table, chart, dan tombol unduh
 for ticker, stock_data in data.items():
@@ -84,52 +95,45 @@ for ticker, stock_data in data.items():
     # Tampilkan tabel yang sudah rapi (kolom flatten)
     st.dataframe(df_plot)
 
-    if y_col is None:
-        st.warning(f"Kolom harga penutupan untuk {ticker} tidak ditemukan.")
+    # Candlestick membutuhkan OHLC
+    open_col  = pick_col(df_plot, "Open", ticker)
+    high_col  = pick_col(df_plot, "High", ticker)
+    low_col   = pick_col(df_plot, "Low", ticker)
+    close_col = pick_col(df_plot, "Close", ticker)
+
+    st.subheader(f'Candlestick Chart for {ticker}')
+
+    if "Date" not in df_plot.columns:
+        st.warning(f"Kolom Date tidak ditemukan untuk {ticker}.")
         continue
 
-    # Plot line chart
-st.subheader(f'Candlestick Chart for {ticker}')
+    if not all([open_col, high_col, low_col, close_col]):
+        st.warning(f"OHLC tidak lengkap untuk {ticker}. Kolom yang ada: {df_plot.columns.tolist()}")
+        continue
 
-# Pastikan kolom OHLC ada
-# Karena df_plot bisa punya nama kolom Close_BTC-USD dll, kita cari yang cocok
-def pick_col(df, base, ticker):
-    for c in [f"{base}_{ticker}", base]:
-        if c in df.columns:
-            return c
-    return None
-
-open_col  = pick_col(df_plot, "Open", ticker)
-high_col  = pick_col(df_plot, "High", ticker)
-low_col   = pick_col(df_plot, "Low", ticker)
-close_col = pick_col(df_plot, "Close", ticker)
-
-if not all([open_col, high_col, low_col, close_col]) or "Date" not in df_plot.columns:
-    st.warning("Kolom OHLC tidak lengkap untuk candlestick.")
-else:
-    fig = go.Figure(
-        data=[go.Candlestick(
-            x=df_plot["Date"],
-            open=df_plot[open_col],
-            high=df_plot[high_col],
-            low=df_plot[low_col],
-            close=df_plot[close_col],
-            increasing_line_color="green",
-            decreasing_line_color="red",
-            increasing_fillcolor="green",
-            decreasing_fillcolor="red",
-        )]
-    )
+    fig = go.Figure(data=[go.Candlestick(
+        x=df_plot["Date"],
+        open=df_plot[open_col],
+        high=df_plot[high_col],
+        low=df_plot[low_col],
+        close=df_plot[close_col],
+        increasing_line_color="green",
+        decreasing_line_color="red",
+        increasing_fillcolor="green",
+        decreasing_fillcolor="red",
+        name=ticker
+    )])
 
     fig.update_layout(
         title=f"{ticker} Candlestick",
         xaxis_title="Date",
         yaxis_title="Price",
         template="plotly_dark",
-        xaxis_rangeslider_visible=False,  # slider bawah dimatikan (opsional)
+        xaxis_rangeslider_visible=False
     )
 
     st.plotly_chart(fig, use_container_width=True)
+
     # Download CSV pakai df_plot (kolom sudah rata)
     csv_buffer = StringIO()
     df_plot.to_csv(csv_buffer, index=False)
@@ -141,5 +145,3 @@ else:
         file_name=f"{ticker}_data.csv",
         mime="text/csv"
     )
-
-
