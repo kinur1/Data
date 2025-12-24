@@ -3,6 +3,7 @@ import yfinance as yf
 import pandas as pd
 import plotly.express as px
 from io import StringIO
+import plotly.graph_objects as go
 
 st.title('Ticker Data Viewer')
 
@@ -88,7 +89,7 @@ for ticker, stock_data in data.items():
         continue
 
     # Plot line chart
-  st.subheader(f'Candlestick Chart for {ticker}')
+st.subheader(f'Candlestick Chart for {ticker}')
 
 # Pastikan kolom OHLC ada
 # Karena df_plot bisa punya nama kolom Close_BTC-USD dll, kita cari yang cocok
@@ -140,4 +141,5 @@ else:
         file_name=f"{ticker}_data.csv",
         mime="text/csv"
     )
+
 
