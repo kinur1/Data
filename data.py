@@ -37,13 +37,13 @@ def flatten_columns(columns):
 def prepare_df_for_plot(df, ticker):
     df_reset = df.reset_index()
 
-    # Flatten MultiIndex columns (including ('Date',''))
+    # Flatten MultiIndex columns
     if isinstance(df_reset.columns, pd.MultiIndex):
         df_reset.columns = flatten_columns(df_reset.columns)
     else:
         df_reset.columns = [str(c) for c in df_reset.columns]
 
-    # Pastikan kolom 'Date' ada (kadang hasil reset index = 'index')
+    # Pastikan kolom 'Date' ada
     if 'Date' not in df_reset.columns and 'index' in df_reset.columns:
         df_reset = df_reset.rename(columns={'index': 'Date'})
 
@@ -71,7 +71,7 @@ for ticker in tickers:
         stock_data = yf.download(
             ticker,
             start=pd.to_datetime(start_date),
-            end=pd.to_datetime(end_date) + timedelta(days=1),  # FIX: end inclusive
+            end=pd.to_datetime(end_date) + timedelta(days=1),  # end inclusive
             progress=False,
             group_by="column",
             auto_adjust=False,
@@ -84,10 +84,12 @@ for ticker in tickers:
     except Exception as e:
         st.error(f"Error downloading data for ticker: {ticker}. Error: {e}")
 
+st.write("Ticker berhasil dimuat:", list(data.keys()))
 
 # Tampilkan table, chart, dan tombol unduh
 for ticker, stock_data in data.items():
     st.subheader(f'Data for {ticker}')
+
     df_plot, y_col = prepare_df_for_plot(stock_data, ticker)
 
     # Tampilkan tabel yang sudah rapi (kolom flatten)
@@ -109,6 +111,30 @@ for ticker, stock_data in data.items():
         st.warning(f"OHLC tidak lengkap untuk {ticker}. Kolom yang ada: {df_plot.columns.tolist()}")
         continue
 
+    # ===== ATH / ATL (berdasarkan data yang dipilih) =====
+    if high_col and low_col:
+        ath = df_plot[high_col].max()
+        atl = df_plot[low_col].min()
+
+        ath_date = df_plot.loc[df_plot[high_col].idxmax(), "Date"]
+        atl_date = df_plot.loc[df_plot[low_col].idxmin(), "Date"]
+
+        c1, c2 = st.columns(2)
+        c1.metric(
+            label="All-Time High (range dipilih)",
+            value=f"{ath:,.4f}",
+            help=f"Tanggal: {ath_date}"
+        )
+        c2.metric(
+            label="All-Time Low (range dipilih)",
+            value=f"{atl:,.4f}",
+            help=f"Tanggal: {atl_date}"
+        )
+    else:
+        st.warning("Tidak bisa menghitung ATH / ATL (kolom High / Low tidak ditemukan).")
+        ath, atl = None, None  # biar aman
+
+    # ===== Candlestick =====
     fig = go.Figure(data=[go.Candlestick(
         x=df_plot["Date"],
         open=df_plot[open_col],
@@ -121,6 +147,23 @@ for ticker, stock_data in data.items():
         decreasing_fillcolor="red",
         name=ticker
     )])
+
+    # ===== Garis ATH & ATL =====
+    if ath is not None and atl is not None:
+        fig.add_hline(
+            y=ath,
+            line_dash="dot",
+            line_color="green",
+            annotation_text="ATH",
+            annotation_position="top left"
+        )
+        fig.add_hline(
+            y=atl,
+            line_dash="dot",
+            line_color="red",
+            annotation_text="ATL",
+            annotation_position="bottom left"
+        )
 
     fig.update_layout(
         title=f"{ticker} Candlestick",
@@ -137,4 +180,9 @@ for ticker, stock_data in data.items():
     df_plot.to_csv(csv_buffer, index=False)
     csv_data = csv_buffer.getvalue()
 
-
+    st.download_button(
+        label=f"Download {ticker} data as CSV",
+        data=csv_data,
+        file_name=f"{ticker}_data.csv",
+        mime="text/csv"
+    )
