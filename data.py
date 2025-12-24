@@ -4,7 +4,7 @@ import pandas as pd
 import plotly.express as px
 from io import StringIO
 
-st.title('Yahoo Finance Ticker Data Viewer')
+st.title('Ticker Data Viewer')
 
 # User input for tickers
 ticker_input = st.text_input("Masukan Ticker (Seperti BTC-USD, BNB-USD):", 'BTC-USD, BNB-USD')
@@ -88,26 +88,47 @@ for ticker, stock_data in data.items():
         continue
 
     # Plot line chart
-    st.subheader(f'Enhanced Line Chart for {ticker}')
-    fig = px.line(
-        df_plot,
-        x="Date",
-        y=y_col,
-        title=f"{ticker} Close Price",
-        labels={y_col: "Close Price", "Date": "Date"},
-        color_discrete_sequence=px.colors.sequential.Viridis
-    )
-    fig.update_traces(line=dict(width=2.5))
-    fig.update_layout(
-        xaxis_title="Date",
-        yaxis_title="Close Price",
-        template="plotly_dark",
-        title=dict(text=f"{ticker} Closing Prices", font=dict(size=20, color="white"), x=0.5),
-        xaxis=dict(showline=True, showgrid=False, linecolor="white"),
-        yaxis=dict(showline=True, showgrid=True, gridcolor="gray", linecolor="white"),
-    )
-    st.plotly_chart(fig, use_container_width=True)
+  st.subheader(f'Candlestick Chart for {ticker}')
 
+# Pastikan kolom OHLC ada
+# Karena df_plot bisa punya nama kolom Close_BTC-USD dll, kita cari yang cocok
+def pick_col(df, base, ticker):
+    for c in [f"{base}_{ticker}", base]:
+        if c in df.columns:
+            return c
+    return None
+
+open_col  = pick_col(df_plot, "Open", ticker)
+high_col  = pick_col(df_plot, "High", ticker)
+low_col   = pick_col(df_plot, "Low", ticker)
+close_col = pick_col(df_plot, "Close", ticker)
+
+if not all([open_col, high_col, low_col, close_col]) or "Date" not in df_plot.columns:
+    st.warning("Kolom OHLC tidak lengkap untuk candlestick.")
+else:
+    fig = go.Figure(
+        data=[go.Candlestick(
+            x=df_plot["Date"],
+            open=df_plot[open_col],
+            high=df_plot[high_col],
+            low=df_plot[low_col],
+            close=df_plot[close_col],
+            increasing_line_color="green",
+            decreasing_line_color="red",
+            increasing_fillcolor="green",
+            decreasing_fillcolor="red",
+        )]
+    )
+
+    fig.update_layout(
+        title=f"{ticker} Candlestick",
+        xaxis_title="Date",
+        yaxis_title="Price",
+        template="plotly_dark",
+        xaxis_rangeslider_visible=False,  # slider bawah dimatikan (opsional)
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
     # Download CSV pakai df_plot (kolom sudah rata)
     csv_buffer = StringIO()
     df_plot.to_csv(csv_buffer, index=False)
@@ -119,3 +140,4 @@ for ticker, stock_data in data.items():
         file_name=f"{ticker}_data.csv",
         mime="text/csv"
     )
+
