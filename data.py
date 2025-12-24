@@ -137,10 +137,3 @@ for ticker, stock_data in data.items():
     df_plot.to_csv(csv_buffer, index=False)
     csv_data = csv_buffer.getvalue()
 
-    st.download_button(
-        label=f"Download {ticker} data as CSV",
-        data=csv_data,
-        file_name=f"{ticker}_data.csv",
-        mime="text/csv"
-    )
-
