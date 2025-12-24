@@ -84,8 +84,6 @@ for ticker in tickers:
     except Exception as e:
         st.error(f"Error downloading data for ticker: {ticker}. Error: {e}")
 
-# Info ticker yang berhasil ke-load (biar jelas kalau cuma 1)
-st.write("Ticker berhasil dimuat:", list(data.keys()))
 
 # Tampilkan table, chart, dan tombol unduh
 for ticker, stock_data in data.items():
@@ -145,3 +143,4 @@ for ticker, stock_data in data.items():
         file_name=f"{ticker}_data.csv",
         mime="text/csv"
     )
+
