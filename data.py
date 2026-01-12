@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 from io import StringIO
 from datetime import timedelta
 
-st.title('Ticker & Data Viewer')
+st.title('Data & chart Viewer')
 
 # User input for tickers
 ticker_input = st.text_input("Masukan Ticker (Seperti BTC-USD, BNB-USD):", 'BTC-USD, BNB-USD')
@@ -179,4 +179,5 @@ for ticker, stock_data in data.items():
     csv_buffer = StringIO()
     df_plot.to_csv(csv_buffer, index=False)
     csv_data = csv_buffer.getvalue()
+
 
